@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:tip_calculator_flutter/widgets/bill_amount_fill.dart';
 import 'package:tip_calculator_flutter/widgets/person_counter.dart';
 import 'package:tip_calculator_flutter/widgets/tip_slider.dart';
+import 'package:tip_calculator_flutter/provider/app_state_provider.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => AppStateProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -15,36 +22,26 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool isDarkMode = false; // Track the theme state
-
   @override
   Widget build(BuildContext context) {
+    final appState = Provider.of<AppStateProvider>(context);
     return MaterialApp(
       title: 'Tip Calculator',
       theme: ThemeData.light(), // Light theme
       darkTheme: ThemeData.dark(), // Dark theme
-      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light, // Toggle theme
-      home: UTip(
-        isDarkMode: isDarkMode,
-        onThemeChanged: (value) {
-          setState(() {
-            isDarkMode = value; // Update the theme state
-          });
-        },
-      ),
+      themeMode:
+          appState.isDarkMode
+              ? ThemeMode.dark
+              : ThemeMode.light, // Toggle theme
+      home: UTip(isDarkMode: appState.isDarkMode),
     );
   }
 }
 
 class UTip extends StatefulWidget {
   final bool isDarkMode;
-  final ValueChanged<bool> onThemeChanged;
 
-  const UTip({
-    super.key,
-    required this.isDarkMode,
-    required this.onThemeChanged,
-  });
+  const UTip({super.key, required this.isDarkMode});
 
   @override
   State<UTip> createState() => _UTipState();
@@ -90,9 +87,13 @@ class _UTipState extends State<UTip> {
       appBar: AppBar(
         title: const Text("Tip Calculator"),
         actions: [
-          Switch(
-            value: widget.isDarkMode,
-            onChanged: widget.onThemeChanged, // Toggle theme
+          Consumer<AppStateProvider>(
+            builder: (context, value, child) {
+              return Switch(
+                value: value.isDarkMode,
+                onChanged: (bool newValue) => value.toggleTheme(),
+              );
+            },
           ),
         ],
       ),
@@ -107,17 +108,21 @@ class _UTipState extends State<UTip> {
                 color: theme.colorScheme.inversePrimary,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Column(
-                children: [
-                  Text("Total per Person", style: style),
-                  Text(
-                    total.toStringAsFixed(2),
-                    style: style.copyWith(
-                      color: theme.colorScheme.onPrimary,
-                      fontSize: theme.textTheme.displaySmall?.fontSize,
-                    ),
-                  ),
-                ],
+              child: Consumer<AppStateProvider>(
+                builder: (context, value, child) {
+                  return Column(
+                    children: [
+                      Text("Total per Person", style: style),
+                      Text(
+                        value.totalPerPerson.toStringAsFixed(2),
+                        style: style.copyWith(
+                          color: theme.colorScheme.onPrimary,
+                          fontSize: theme.textTheme.displaySmall?.fontSize,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -129,56 +134,56 @@ class _UTipState extends State<UTip> {
                 borderRadius: BorderRadius.circular(5),
                 border: Border.all(color: theme.colorScheme.primary, width: 2),
               ),
-              child: Column(
-                children: [
-                  BillAmountField(
-                    billAmount: billAmountValue.toString(),
-                    onChanged: (value) {
-                      setState(() {
-                        billAmountValue = double.parse(value);
-                      });
-                    },
-                  ),
-                  PersonCounter(
-                    theme: theme,
-                    personCounter: _personCounter,
-                    onDecrement: decreament,
-                    onIncrement: increament,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("Tip", style: theme.textTheme.titleMedium),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
+              child: Consumer<AppStateProvider>(
+                builder: (context, appState, child) {
+                  return Column(
+                    children: [
+                      BillAmountField(
+                        billAmount: billAmountValue.toString(),
+                        onChanged: (value) {
+                          appState.updateBillAmount(value);
+                        },
+                      ),
+                      PersonCounter(
+                        theme: theme,
+                        personCounter: appState.personCounter,
+                        onDecrement: appState.decrementPersonCounter,
+                        onIncrement: appState.incrementPersonCounter,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Tip", style: theme.textTheme.titleMedium),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8.0),
+                              child: Text(
+                                appState.totalTip.toStringAsFixed(2),
+                                style: theme.textTheme.titleMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Center(
                           child: Text(
-                            tip.toStringAsFixed(2),
+                            "${(appState.sliderValue * 100).round()}%",
                             style: theme.textTheme.titleMedium,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Center(
-                      child: Text(
-                        "${(sliderValue * 100).round()}%",
-                        style: theme.textTheme.titleMedium,
                       ),
-                    ),
-                  ),
-                  TipSlider(
-                    sliderValue: sliderValue,
-                    onSliderChange: (value) {
-                      setState(() {
-                        sliderValue = value;
-                      });
-                    },
-                  ),
-                ],
+                      TipSlider(
+                        sliderValue: appState.sliderValue,
+                        onSliderChange: (value) {
+                          appState.updateSliderValue(value);
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
